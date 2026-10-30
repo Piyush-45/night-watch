@@ -16,6 +16,8 @@ object Store {
 
     fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    fun clear(ctx: Context) = prefs(ctx).edit().remove(KEY).apply()
+
     fun merge(ctx: Context, fresh: List<Session>): List<Session> {
         val map = TreeMap<Long, Session>()
         val arr = try {
