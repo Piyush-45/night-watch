@@ -8,6 +8,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -29,10 +30,17 @@ class WatchService : LifecycleService() {
     private val handler = Handler(Looper.getMainLooper())
     private var busy = false
     private var registered = false
+    private val guard by lazy { SleepGuard(this) }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
-            if (i.action == Intent.ACTION_USER_PRESENT) capture(force = false)
+            when (i.action) {
+                Intent.ACTION_USER_PRESENT -> {
+                    capture(force = false)
+                    guard.start()
+                }
+                Intent.ACTION_SCREEN_OFF -> guard.stop()
+            }
         }
     }
 
@@ -55,14 +63,25 @@ class WatchService : LifecycleService() {
 
         if (!registered) {
             ContextCompat.registerReceiver(
-                this, receiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED
+                this, receiver,
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_USER_PRESENT)
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                },
+                ContextCompat.RECEIVER_NOT_EXPORTED
             )
             registered = true
             Prefs.log(this, "Watcher on")
         }
         running = true
 
-        if (intent?.action == ACTION_TEST) capture(force = true)
+        if (getSystemService(PowerManager::class.java).isInteractive) guard.start()
+
+        when (intent?.action) {
+            ACTION_TEST -> capture(force = true)
+            ACTION_SNOOZE -> guard.snooze()
+            ACTION_GUARD_TEST -> guard.test()
+        }
         return START_STICKY
     }
 
@@ -74,6 +93,7 @@ class WatchService : LifecycleService() {
             }
         }
         registered = false
+        guard.stop()
         running = false
         Prefs.log(this, "Watcher off")
         super.onDestroy()
@@ -157,13 +177,16 @@ class WatchService : LifecycleService() {
 
     companion object {
         const val ACTION_TEST = "work.piyush.nightwatch.TEST"
+        const val ACTION_SNOOZE = "work.piyush.nightwatch.SNOOZE"
+        const val ACTION_GUARD_TEST = "work.piyush.nightwatch.GUARD_TEST"
 
         @Volatile
         var running = false
 
-        fun start(ctx: Context, test: Boolean = false) {
+        fun start(ctx: Context, test: Boolean = false, action: String? = null) {
             val i = Intent(ctx, WatchService::class.java)
             if (test) i.action = ACTION_TEST
+            if (action != null) i.action = action
             try {
                 ContextCompat.startForegroundService(ctx, i)
             } catch (e: Exception) {

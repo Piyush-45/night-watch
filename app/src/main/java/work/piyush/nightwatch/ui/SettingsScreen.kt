@@ -2,6 +2,8 @@ package work.piyush.nightwatch.ui
 
 import android.app.TimePickerDialog
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,6 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import work.piyush.nightwatch.AdminReceiver
+import work.piyush.nightwatch.LockLog
 import work.piyush.nightwatch.Photos
 import work.piyush.nightwatch.Prefs
 import work.piyush.nightwatch.Setup
@@ -50,6 +55,13 @@ fun SettingsScreen(tick: Int, onBack: () -> Unit, onSetup: () -> Unit) {
     var selfie by remember { mutableStateOf(Prefs.selfie(ctx)) }
     var selfieQuiet by remember { mutableStateOf(Prefs.selfieQuietOnly(ctx)) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var guard by remember { mutableStateOf(Prefs.guard(ctx)) }
+    var guardQuiet by remember { mutableStateOf(Prefs.guardQuietOnly(ctx)) }
+    var guardAfter by remember { mutableIntStateOf(Prefs.guardAfterMin(ctx)) }
+    var guardGrace by remember { mutableIntStateOf(Prefs.guardGraceMin(ctx)) }
+    var picker by remember { mutableStateOf<String?>(null) }
+    var confirmRemoveAdmin by remember { mutableStateOf(false) }
+    val adminOn = remember(tick, refresh) { AdminReceiver.active(ctx) }
 
     val photoCount = remember(tick, refresh) { Photos.all(ctx).size }
     val log = remember(tick, refresh) { Prefs.diag(ctx) }
@@ -122,9 +134,55 @@ fun SettingsScreen(tick: Int, onBack: () -> Unit, onSetup: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Hint("Photos stay private inside the app, not in your gallery. Android briefly shows a green camera dot while a photo is taken.")
 
+        SectionTitle("Sleep guard")
+        Panel {
+            Column {
+                SwitchRow(
+                    "Lock if someone falls asleep on reels",
+                    "Asks \"Still watching?\" when Instagram, YouTube etc. stay open too long",
+                    guard
+                ) { guard = it; Prefs.setGuard(ctx, it) }
+                HorizontalDivider(color = C.line)
+                SwitchRow("Only during quiet hours", null, guardQuiet, enabled = guard) {
+                    guardQuiet = it; Prefs.setGuardQuietOnly(ctx, it)
+                }
+                HorizontalDivider(color = C.line)
+                SettingRow("Ask \"Still watching?\" after", "$guardAfter min", "Same app open, no switching") {
+                    picker = "after"
+                }
+                HorizontalDivider(color = C.line)
+                SettingRow("Lock if no answer in", "$guardGrace min", null) { picker = "grace" }
+                HorizontalDivider(color = C.line)
+                SettingRow(
+                    "Auto-lock permission",
+                    if (adminOn) "Allowed" else "Allow",
+                    if (adminOn) "Tap to remove (needed before uninstalling)" else "Needed to turn the screen off"
+                ) {
+                    if (adminOn) confirmRemoveAdmin = true else onSetup()
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        WatchService.start(ctx, action = WatchService.ACTION_GUARD_TEST)
+                        refresh++
+                    },
+                    enabled = adminOn,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Test: lock in 30 seconds") }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (adminOn) "Go to the home screen and ignore the \"Still watching?\" banner. The phone should lock in ~30s. Tap \"I'm awake\" to cancel."
+                    else "Allow auto-lock first.",
+                    color = C.dim, fontSize = 12.sp
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Hint("Android doesn't let apps see touches, so \"Still watching?\" is how it knows nobody's awake. While someone is actively scrolling, they just tap \"I'm awake\" and it asks again later.")
+
         SectionTitle("Setup")
         Panel {
-            SettingRow("Permissions & battery", "$setupDone of 4", "Check what's missing", onClick = onSetup)
+            SettingRow("Permissions & battery", "$setupDone of 5", "Check what's missing", onClick = onSetup)
         }
 
         SectionTitle("Data")
@@ -170,6 +228,56 @@ fun SettingsScreen(tick: Int, onBack: () -> Unit, onSetup: () -> Unit) {
         Spacer(Modifier.height(32.dp))
     }
 
+    picker?.let { which ->
+        val opts = if (which == "after") listOf(5, 10, 15, 20, 30, 45, 60) else listOf(1, 2, 3, 5)
+        val current = if (which == "after") guardAfter else guardGrace
+        AlertDialog(
+            onDismissRequest = { picker = null },
+            title = { Text(if (which == "after") "Ask after" else "Lock if no answer in") },
+            text = {
+                Column {
+                    opts.forEach { o ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (which == "after") {
+                                        guardAfter = o; Prefs.setGuardAfterMin(ctx, o)
+                                    } else {
+                                        guardGrace = o; Prefs.setGuardGraceMin(ctx, o)
+                                    }
+                                    picker = null
+                                }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            RadioButton(selected = o == current, onClick = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("$o min")
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { picker = null }) { Text("Close") } }
+        )
+    }
+
+    if (confirmRemoveAdmin) {
+        AlertDialog(
+            onDismissRequest = { confirmRemoveAdmin = false },
+            title = { Text("Remove auto-lock permission?") },
+            text = { Text("Sleep guard will only send prompts and won't be able to lock the phone. You need to do this before uninstalling Night Watch.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    AdminReceiver.remove(ctx)
+                    confirmRemoveAdmin = false
+                    refresh++
+                }) { Text("Remove", color = C.bad) }
+            },
+            dismissButton = { TextButton(onClick = { confirmRemoveAdmin = false }) { Text("Cancel") } }
+        )
+    }
+
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -178,6 +286,7 @@ fun SettingsScreen(tick: Int, onBack: () -> Unit, onSetup: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     Store.clear(ctx)
+                    LockLog.clear(ctx)
                     Photos.deleteAll(ctx)
                     confirmDelete = false
                     refresh++

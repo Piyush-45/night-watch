@@ -33,9 +33,11 @@ object Setup {
         return pm.isIgnoringBatteryOptimizations(ctx.packageName)
     }
 
+    fun admin(ctx: Context) = AdminReceiver.active(ctx)
+
     /** Minimum needed to run. */
     fun ready(ctx: Context) = usage(ctx) && camera(ctx)
 
     fun doneCount(ctx: Context) =
-        listOf(usage(ctx), camera(ctx), notifications(ctx), battery(ctx)).count { it }
+        listOf(usage(ctx), camera(ctx), notifications(ctx), battery(ctx), admin(ctx)).count { it }
 }

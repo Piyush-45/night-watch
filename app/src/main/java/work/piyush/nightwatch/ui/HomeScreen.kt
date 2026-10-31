@@ -121,14 +121,14 @@ fun HomeScreen(tick: Int, onSettings: () -> Unit, onSetup: () -> Unit) {
         }
 
         // Setup banner
-        if (setupDone < 4) {
+        if (setupDone < 5) {
             item {
                 Panel(Modifier.clickable { onSetup() }, color = C.warn.copy(alpha = 0.12f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Warning, null, tint = C.warn)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Finish setup ($setupDone of 4 done)", color = C.text, fontWeight = FontWeight.SemiBold)
+                            Text("Finish setup ($setupDone of 5 done)", color = C.text, fontWeight = FontWeight.SemiBold)
                             Text(
                                 if (ready) "Optional steps left. They make it more reliable." else "Some permissions are missing, so tracking can't run yet.",
                                 color = C.dim, fontSize = 13.sp
@@ -209,6 +209,14 @@ fun HomeScreen(tick: Int, onSettings: () -> Unit, onSetup: () -> Unit) {
                         )
                         StatTile(Data.dur(totalMs), "screen time", Modifier.weight(1f))
                         StatTile("$photos", if (photos == 1) "photo" else "photos", Modifier.weight(1f))
+                    }
+                    val locked = night.filter { it.autoLocked }
+                    if (locked.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "Fell asleep on the phone? Auto-locked ${locked.size}× (last at ${timeFmt.format(Date(locked.first().s.end))})",
+                            color = C.accent, fontSize = 13.sp
+                        )
                     }
                     if (top.isNotEmpty()) {
                         Spacer(Modifier.height(12.dp))
@@ -367,6 +375,7 @@ private fun SessionCard(row: Unlock, apps: Apps, onPhotos: () -> Unit) {
                     if (row.quiet) Tag("Quiet hours", C.bad)
                     if (row.sensitive) Tag("Private apps", C.warn)
                     if (row.peek) Tag("Quick peek", C.dim)
+                    if (row.autoLocked) Tag("Auto-locked", C.accent)
                 }
 
                 val list = row.apps

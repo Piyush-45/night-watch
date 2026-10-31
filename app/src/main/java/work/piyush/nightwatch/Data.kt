@@ -20,6 +20,7 @@ data class Unlock(
     val quiet: Boolean,
     val sensitive: Boolean,
     val peek: Boolean,
+    val autoLocked: Boolean,
 )
 
 object Data {
@@ -30,6 +31,7 @@ object Data {
         val now = System.currentTimeMillis()
         val all = Store.merge(ctx, Tracker.read(ctx, now - 7 * DAY, now))
         val photos = Photos.all(ctx)
+        val locks = LockLog.all(ctx)
         return all.sortedByDescending { it.start }.map { s ->
             val ar = s.apps
                 .filter { !apps.hidden(it.pkg) }
@@ -43,6 +45,7 @@ object Data {
                 quiet = Prefs.inQuiet(ctx, s.start),
                 sensitive = real.any { it.cat.sensitive },
                 peek = real.isEmpty() && s.end - s.start < 30_000,
+                autoLocked = !s.ongoing && locks.any { it.t in (s.end - 20_000)..(s.end + 20_000) },
             )
         }
     }

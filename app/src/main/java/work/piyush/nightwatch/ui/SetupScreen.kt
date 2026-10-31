@@ -1,6 +1,7 @@
 package work.piyush.nightwatch.ui
 
 import android.Manifest
+import android.app.admin.DevicePolicyManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -43,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import work.piyush.nightwatch.AdminReceiver
 import work.piyush.nightwatch.Prefs
 import work.piyush.nightwatch.Setup
 import work.piyush.nightwatch.WatchService
@@ -57,6 +59,7 @@ fun SetupScreen(tick: Int, onDone: () -> Unit) {
     val camera = remember(tick, local) { Setup.camera(ctx) }
     val notifs = remember(tick, local) { Setup.notifications(ctx) }
     val battery = remember(tick, local) { Setup.battery(ctx) }
+    val admin = remember(tick, local) { Setup.admin(ctx) }
 
     Column(
         Modifier
@@ -71,7 +74,7 @@ fun SetupScreen(tick: Int, onDone: () -> Unit) {
             IconButton(onClick = onDone) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
             Title("Set up Night Watch")
         }
-        Hint("4 quick steps. Each one opens a system screen. Turn it on, then come back here.")
+        Hint("5 quick steps. Each one opens a system screen. Turn it on, then come back here.")
         Spacer(Modifier.height(16.dp))
 
         Step(
@@ -114,6 +117,22 @@ fun SetupScreen(tick: Int, onDone: () -> Unit) {
             } catch (_: Exception) {
                 ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             }
+        }
+
+        Step(
+            n = 5, done = admin, required = false,
+            title = "Auto-lock (sleep guard)",
+            desc = "Lets Night Watch lock the screen if someone falls asleep with reels playing. It only asks for \"lock screen\", nothing else. Tap Activate on the next screen.",
+            action = "Allow auto-lock"
+        ) {
+            ctx.startActivity(
+                Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                    .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminReceiver.component(ctx))
+                    .putExtra(
+                        DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                        "Night Watch uses this only to turn the screen off when nobody answers \"Still watching?\" at night."
+                    )
+            )
         }
 
         Spacer(Modifier.height(20.dp))

@@ -84,4 +84,36 @@ object Tracker {
         if (sessionStart >= 0) endSession(to, true)
         return out
     }
+
+    /**
+     * App currently in front + since when it has been in front continuously.
+     * Moving between screens inside the same app (pause → resume within 3s) doesn't reset the timer.
+     */
+    fun foreground(ctx: Context, now: Long): Pair<String, Long>? {
+        val usm = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val events = usm.queryEvents(now - 6L * 60 * 60 * 1000, now) ?: return null
+        val e = UsageEvents.Event()
+        var fg: String? = null
+        var since = 0L
+        var lastPkg: String? = null
+        var lastPause = 0L
+        while (events.hasNextEvent()) {
+            events.getNextEvent(e)
+            val pkg = e.packageName ?: continue
+            when (e.eventType) {
+                ACTIVITY_RESUMED -> {
+                    val continued = (pkg == fg) || (pkg == lastPkg && e.timeStamp - lastPause < 3_000)
+                    if (!continued) since = e.timeStamp
+                    fg = pkg
+                }
+                ACTIVITY_PAUSED -> if (pkg == fg) {
+                    lastPkg = pkg
+                    lastPause = e.timeStamp
+                    fg = null
+                }
+            }
+        }
+        val f = fg ?: return null
+        return f to since
+    }
 }

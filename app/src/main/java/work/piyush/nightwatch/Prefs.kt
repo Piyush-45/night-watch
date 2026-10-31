@@ -25,6 +25,16 @@ object Prefs {
     fun selfieQuietOnly(ctx: Context) = p(ctx).getBoolean("selfie_quiet", true)
     fun setSelfieQuietOnly(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("selfie_quiet", v).apply()
 
+    // Sleep guard
+    fun guard(ctx: Context) = p(ctx).getBoolean("guard", true)
+    fun setGuard(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("guard", v).apply()
+    fun guardQuietOnly(ctx: Context) = p(ctx).getBoolean("guard_quiet", true)
+    fun setGuardQuietOnly(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("guard_quiet", v).apply()
+    fun guardAfterMin(ctx: Context) = p(ctx).getInt("guard_after", 20)
+    fun setGuardAfterMin(ctx: Context, v: Int) = p(ctx).edit().putInt("guard_after", v).apply()
+    fun guardGraceMin(ctx: Context) = p(ctx).getInt("guard_grace", 2)
+    fun setGuardGraceMin(ctx: Context, v: Int) = p(ctx).edit().putInt("guard_grace", v).apply()
+
     fun inQuiet(ctx: Context, ts: Long): Boolean {
         val c = Calendar.getInstance().apply { timeInMillis = ts }
         val m = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
